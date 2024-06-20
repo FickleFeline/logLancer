@@ -1,25 +1,51 @@
+import configparser
 import time
+from datetime import timedelta
 # import textual
 # import argparse
 
-def calcTimeDiff(start, end, format):
+def calcTimeDiff(start: time.struct_time, end: time.struct_time):
    '''
-   Returns time difference between two dateTime objects in the given format
+   Returns time difference between two time.struct_time objects as a timedelta
    '''
 
-   diff = time.strftime(format, time.localtime(time.mktime(end) - time.mktime(start)))
+   diff = timedelta(seconds = (time.mktime(end) - time.mktime(start)))
 
    return diff
 
+def startTimeLog(config: configparser.ConfigParser):
+   '''
+   Creates a new entry in the current log file with all the needed data
+   '''
 
-def main():
-   # This is the main function #
-   currentTime = time.localtime()
+   # NOTE: Get commandlilne (and/or TUI) arguments. i.e.: tags, description, etc...
+   timeFormat = config["settings"]["timeFormat"]
+   currentTime = time.gmtime()
 
-   timeFormat = "%y-%m-%d %a %H:%M:%S"
+   # {{{ Testing params
+   thePast = time.strptime("24-04-15 Mon 11:30:59", timeFormat)
+   # }}}
+
+   
    formattedTime = time.strftime(timeFormat, currentTime)
 
-   print (formattedTime)
+   print(calcTimeDiff(thePast, currentTime))
+
+   pass
+
+def creatDefConfig():
+
+   # TODO: Write a function that creates a default config file
+
+   pass
+
+def main():
+
+   #importing config
+   config = configparser.ConfigParser()
+   _ =config.read("./config.ini")
+
+   startTimeLog(config)
 
    return
 
