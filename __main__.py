@@ -1,17 +1,60 @@
-from pathlib import Path # to get location of home directory
-import configparser # to create / read config file
-import csv # to read / write log dictionaries
-import time # for time stuff
-from datetime import timedelta # also for time stuff
+from pathlib import Path         # to get location of home directory
+import configparser              # to create / read config file
+import csv                       # to import/export the sqlite db to csv files
+import sqlite3                   # to store/edit time logs in sqlite files
+from sqlite3.dbapi2 import connect
+import time                      # for time stuff
+from datetime import timedelta   # also for time stuff
 # import textual
 # import argparse
 
-class TimeEntry:
-   def __init__(self, start: str, end: str, desc: str, tags: str):
-      self.start = start
-      self.end = end
-      self.desc = desc
-      self.tags = tags
+# {{{ Helper functions
+
+def initDefConfig():
+
+   # TODO: Write a function that creates a default config file
+
+   pass
+
+def importFromCSV():
+   '''
+   Import data from a CSV file and create a new SQLite database from it
+   '''
+
+   pass
+
+def exportToCSV():
+   '''
+   Export the SQLite databse into a CSV file.
+   '''
+
+   pass
+
+def initDB(config: configparser.ConfigParser, pathToDB: Path | str, args: dict):
+   '''
+   Initiate a new time log database, based information in the config.ini file
+   '''
+
+   columns = args.keys()
+
+   connection = sqlite3.connect(pathToDB)
+   cursor = connection.cursor()
+
+   cursor.execute(f"CREATE TABLE logs({", ".join(columns)})")
+
+   # res = cursor.execute("SELECT name FROM sqlite_master")
+   # print(res.fetchone())
+
+   pass
+
+def updateDB(db):
+   '''
+   Update database columns based on extensinos
+   (Add new ones, delete no longer relevant ones)
+   THIS WILL DESTROY INFORMATION WHEN DELETING COLUMNS!
+   '''
+
+   pass
 
 def calcTimeDiff(start: time.struct_time, end: time.struct_time):
    '''
@@ -22,91 +65,86 @@ def calcTimeDiff(start: time.struct_time, end: time.struct_time):
 
    return diff
 
-def startTimeLog(config: configparser.ConfigParser, pathToCurrentLog: Path | str, args: dict):
+def getTimeLog(pathToCurrentLogFile: Path | str, range: int, which: int):
+   '''
+   Return the desired time log from the log file as a dictionary
+   
+   range:
+   0: Return the whole log file
+   1: Return only the last log
+   2: Return specified log (by ID)
+
+   which:
+   ID of the desired log
+   '''
+
+   #Read pathToLogFile and convert it into a dictionary
+
+   pass
+
+def writeLogToLogFile(pathToLogFile: Path | str, log: dict):
+
+   '''
+   Writes the passed log into the provided log file.
+   If it's ID is already present the old entry will be overwritten!
+   '''
+
+   pass
+# }}} End of Helper funcitons
+
+# {{{ User Facing functions
+
+def startTimeLog(config: configparser.ConfigParser, pathToCurrentLogFile: Path | str, args: dict):
    '''
    Creates a new entry in the current log file with all the needed data.
    If there's no current log file, it creates a new one.
    '''
-   
-   # TODO: Check for the least line of the file and
-   # - If it has no end time ask user to confirm new log.
-   # -- If they answer yes: add current time to endTime
-   # -- if no: exith with an explanation.
-   # - Else append the csv file with the new log.
-   if not Path(pathToCurrentLog).exists(): # if it doesn't exist creat and append the new log entry to it
-      with open(pathToCurrentLog, 'a', newline='') as csvfile:
-         writer = csv.DictWriter(csvfile, fieldnames=args.keys())
-         writer.writeheader()
-         writer.writerow(args)
-         # TODO: Figure out how to only have one title row when appending instead of adding one with every new appending of the file?
-         ###
-      return
 
-   #else chechk the last 2 lines for an endTime key and value
-   newestEntryRaw = lastNlines(pathToCurrentLog, 2)
-   newestEntryProcessed = {}
-   reader = csv.DictReader(newestEntryRaw)
-   for row in reader:
-      newestEntryProcessed = row
-   if newestEntryProcessed["endTime"] == "":
-      print("No end time found!\nWould you like to end the currently running entry and start a new one with the provided details?")
-   # {{{ Testing params
-      consent = True
-      # }}}
+   # Is there a current logFile at the given path?
+   ## No:
+   ### init one
+   ### create new timeLogEntry
+   ### writeLogToLogFile()
+   ### return
 
-      if consent:
-         # TODO: In the csv file set an endTime to last entry and appent the new one to the end of the file.
-         endTimeLog()
-         pass #placeholder pass
-      else:
-         print("Understood. Exiting w/o making any changes")
-         return
+   # Get last log
+   # Check for running task -> is there one?
+   ## Yes:
+   ### endTimeLog()
+   ### create new timeLogEntry
+   ### write to currentTimeLogFile
+   ## No:
+   ### create new timeLogEntry
+   ### writeLogToLogFile()
 
-   else:
-      print(f"End time found: {newestEntryProcessed["endTime"]}")
+   initDB(config = config, pathToDB = pathToCurrentLogFile, args = args)
 
+   pass
 
-def endTimeLog(config: configparser.ConfigParser, pathToCurrentLog: Path | str):
+def endTimeLog(config: configparser.ConfigParser, pathToCurrentLogFile: Path | str):
    '''
    Insert end dateTime to the passed log in the current log file
    '''
    
-   pass
-
-# Function to read
-# last N lines of the file
-def lastNlines(fname, N):
-   #Definitely not copy pasted from https://www.geeksforgeeks.org/python-reading-last-n-lines-of-a-file/ ...
-     
-    assert N >= 0
-    pos = N + 1
-    lines = []
-     
-    with open(fname) as f:
-        while len(lines) <= N:
-             
-            try:
-                # moving cursor from left side to pos line from end
-                f.seek(-pos, 2)
-            # exception block to handle any run time error
-            except IOError:
-                f.seek(0)
-                break
-            # finally block to add lines to list after each iteration
-            finally:
-                lines = list(f)
-            # increasing value of variable exponentially
-            pos *= 2
-             
-    # returning the whole list which stores last N lines
-    return lines[-N:]
-
-
-def creatDefConfig():
-
-   # TODO: Write a function that creates a default config file
+   # Get last log
+   # Check whether it has an end time
+   ## Yes:
+   ### Throw warning
+   ## No:
+   ### add end time to timeLog
+   ### writeLogToLogFile()
 
    pass
+
+def modifTimeLog():
+
+   pass
+
+def deleteTimeLog():
+
+   pass
+
+# }}} End of User Facing functions
 
 def main():
 
@@ -123,7 +161,6 @@ def main():
       if not Path(storage).is_dir():
          storage.mkdir()
          print(f"{storage} created!")
-
    elif not Path(storage).is_dir():
       print(f"The path you've given in config.ini -> storeDataHere:\n({storage})\nis invalid!\nPlease make sure the folder exists and that the path is correct")
       exit("err: invalid storage folder path")
@@ -134,7 +171,7 @@ def main():
 
    formattedTime = time.strftime(timeFormatInStorage, currentTime)
 
-   pathToCurrentLog = f"{storage}/{currentTime.tm_year}-{currentTime.tm_mon}-{currentTime.tm_mday}.csv"
+   pathToCurrentLogFile = f"{storage}/{currentTime.tm_year}-{currentTime.tm_mon}-{currentTime.tm_mday}.tLog" # "tLog" stadns for "time log"
 
    # TODO: Get commandlilne (and/or TUI) arguments. i.e.: tags, description, etc...
    #{{{ PLACHOLDER VARIABLES TO BE EVENTUALLY CHANGED INTO ARGS
@@ -149,7 +186,7 @@ def main():
    logArgs["tags"] = tags
    
 
-   startTimeLog(config= config, pathToCurrentLog= pathToCurrentLog, args= logArgs)
+   startTimeLog(config= config, pathToCurrentLogFile= pathToCurrentLogFile, args= logArgs)
 
    ## {{{ Testing params
    # thePast = time.strptime("24-04-15 Mon 11:30:59", timeFormatInStorage)
