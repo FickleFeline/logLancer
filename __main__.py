@@ -1,10 +1,9 @@
 from pathlib import Path         # to get location of home directory
 import configparser              # to create / read config file
-import csv                       # to import/export the sqlite db to csv files
 import sqlite3                   # to store/edit time logs in sqlite files
-from sqlite3.dbapi2 import connect
 import time                      # for time stuff
 from datetime import timedelta   # also for time stuff
+# import csv                       # to import/export the sqlite db to csv files
 # import textual
 # import argparse
 
@@ -16,36 +15,41 @@ def initDefConfig():
 
    pass
 
-def importFromCSV():
-   '''
-   Import data from a CSV file and create a new SQLite database from it
-   '''
 
-   pass
+# {{{ CSV Import / Export should be a separate tool, nut a built in...
+# def importFromCSV():
+#    '''
+#    Import data from a CSV file and create a new SQLite database from it
+#    '''
+# 
+#    pass
 
-def exportToCSV():
-   '''
-   Export the SQLite databse into a CSV file.
-   '''
+# def exportToCSV():
+#    '''
+#    Export the SQLite databse into a CSV file.
+#    '''
+# 
+#    pass
+# }}} 
 
-   pass
 
-def initDB(config: configparser.ConfigParser, pathToDB: Path | str, args: dict):
+def initDB(config: configparser.ConfigParser, pathToDB: Path | str, logArgs: dict):
    '''
    Initiate a new time log database, based information in the config.ini file
    '''
 
-   columns = args.keys()
+   columns = logArgs.keys()
 
    connection = sqlite3.connect(pathToDB)
    cursor = connection.cursor()
 
-   cursor.execute(f"CREATE TABLE logs({", ".join(columns)})")
+   try:
+      cursor.execute(f"CREATE TABLE logsTable({", ".join(columns)})")
+   except:
+      print("logLancer is trying to create an already existing table in the function 'initDB()'")
 
    # res = cursor.execute("SELECT name FROM sqlite_master")
    # print(res.fetchone())
-
-   pass
 
 def updateDB(db):
    '''
@@ -72,10 +76,10 @@ def getTimeLog(pathToCurrentLogFile: Path | str, range: int, which: int):
    range:
    0: Return the whole log file
    1: Return only the last log
-   2: Return specified log (by ID)
+   2: Return specified log (by rowid)
 
    which:
-   ID of the desired log
+   rowid of the desired log
    '''
 
    #Read pathToLogFile and convert it into a dictionary
@@ -86,7 +90,7 @@ def writeLogToLogFile(pathToLogFile: Path | str, log: dict):
 
    '''
    Writes the passed log into the provided log file.
-   If it's ID is already present the old entry will be overwritten!
+   If it's rowid is already present the old entry will be overwritten!
    '''
 
    pass
@@ -94,30 +98,48 @@ def writeLogToLogFile(pathToLogFile: Path | str, log: dict):
 
 # {{{ User Facing functions
 
-def startTimeLog(config: configparser.ConfigParser, pathToCurrentLogFile: Path | str, args: dict):
+def startTimeLog(config: configparser.ConfigParser, pathToCurrentLogFile: Path | str, logArgs: dict):
    '''
    Creates a new entry in the current log file with all the needed data.
    If there's no current log file, it creates a new one.
    '''
 
    # Is there a current logFile at the given path?
+   if not Path(pathToCurrentLogFile).exists():
    ## No:
-   ### init one
-   ### create new timeLogEntry
-   ### writeLogToLogFile()
-   ### return
+      ## init one
+      initDB(config = config, pathToDB= pathToCurrentLogFile, logArgs= logArgs)
+      ## create new timeLogEntry
+      connection = sqlite3.connect(pathToCurrentLogFile)
+      cursor = connection.cursor()
+
+      cursor.execute(f"""
+         INSERT INTO logsTable VALUES
+            ('{logArgs["startTime"]}', '', '{logArgs["desc"]}', '{';'.join(logArgs["tags"])}')
+      """)
+
+      ## writeLogToLogFile()
+      connection.commit()
+      # print(cursor.execute("SELECT * FROM logsTable").fetchall())
+      return
+   
 
    # Get last log
+
+   connection = sqlite3.connect(pathToCurrentLogFile)
+   cursor = connection.cursor()
+   
    # Check for running task -> is there one?
-   ## Yes:
-   ### endTimeLog()
+   if cursor.execute("SELECT endTime FROM logsTable").fetchall()[-1][0] == '':
+      ## Yes:
+      ## endTimeLog()
+      print(cursor.execute("SELECT rowid FROM logsTable").fetchall()[-1])
    ### create new timeLogEntry
    ### write to currentTimeLogFile
    ## No:
    ### create new timeLogEntry
    ### writeLogToLogFile()
 
-   initDB(config = config, pathToDB = pathToCurrentLogFile, args = args)
 
    pass
 
@@ -171,22 +193,22 @@ def main():
 
    formattedTime = time.strftime(timeFormatInStorage, currentTime)
 
-   pathToCurrentLogFile = f"{storage}/{currentTime.tm_year}-{currentTime.tm_mon}-{currentTime.tm_mday}.tLog" # "tLog" stadns for "time log"
+   pathToCurrentLogFile = f"{storage}/{currentTime.tm_year}-{currentTime.tm_mon}.timelog"
 
    # TODO: Get commandlilne (and/or TUI) arguments. i.e.: tags, description, etc...
-   #{{{ PLACHOLDER VARIABLES TO BE EVENTUALLY CHANGED INTO ARGS
+   #{{{ PLACHOLDER VARIABLES TO BE EVENTUALLY CHANGED INTO logArgs
    description = "this is a task description"
    tags = ["FT", "00"]
    #}}}
 
    logArgs = {}
-   logArgs["starTime"] = formattedTime
+   logArgs["startTime"] = formattedTime
    logArgs["endTime"] = ""
    logArgs["desc"] = description
    logArgs["tags"] = tags
    
 
-   startTimeLog(config= config, pathToCurrentLogFile= pathToCurrentLogFile, args= logArgs)
+   startTimeLog(config= config, pathToCurrentLogFile= pathToCurrentLogFile, logArgs= logArgs)
 
    ## {{{ Testing params
    # thePast = time.strptime("24-04-15 Mon 11:30:59", timeFormatInStorage)
