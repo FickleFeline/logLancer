@@ -113,9 +113,28 @@ def startTimeLog(config: configparser.ConfigParser, pathToCurrentLogFile: Path |
       connection = sqlite3.connect(pathToCurrentLogFile)
       cursor = connection.cursor()
 
+      row = ""
+      for key in logArgs.keys():
+         if isinstance(logArgs[f'{key}'], list):
+            row+= f"'{"; ".join(logArgs[f'{key}'])}', "
+         elif isinstance(logArgs[f'{key}'], str):
+            row+= f"'{logArgs[f'{key}']}', "
+         elif isinstance(logArgs[f'{key}'], (int, float, complex)) and not  isinstance(logArgs[f'{key}'], bool):
+            row+= f"{logArgs[f'{key}']}, "
+         elif isinstance(logArgs[f'{key}'], bool):
+            row+= f"{logArgs[f'{key}']}, "
+         else:
+            print(f"{key} in your log arguments is a (hopefully sqlite3 compatible) datatype that the dumbasss dev of this project didn't think about,\nplease open an issue on the project's github...")
+            exit()
+
+
+      row = row[:-2]
+
+      print(f"This is the row:\n<{row}>\n================================")
+
       cursor.execute(f"""
          INSERT INTO logsTable VALUES
-            ('{logArgs["startTime"]}', '', '{logArgs["desc"]}', '{';'.join(logArgs["tags"])}')
+            ({row})
       """)
 
       ## writeLogToLogFile()
