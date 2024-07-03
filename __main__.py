@@ -12,8 +12,27 @@ from datetime import timedelta   # also for time stuff
 def initDefConfig():
 
    # TODO: Write a function that creates a default config file
+   defaultConfig= configparser.ConfigParser(allow_no_value=True)
+   defaultConfig['settings'] = {
+      '\n'
+      '# Note that in the `timeFormat` variable below you have to put two `%` signs bc the configparser uses `%` as a delimiter\n'
+      'timeformatinstorage' : '%%y-%%m-%%d %%H:%%M:%%S',
+      'timeformatdisplayed' : '%%y-%%m-%%d %%a %%H:%%M:%%S',
+      '\n'
+      '# Path to the folder you\'d like to store logLancer data (No `"`s needed around it!)\n'
+      '# If left blank it defaults to ~/.logLancerData\n'
+      'storedatahere' : ''
+   }
+   defaultConfig['expansions'] = {
+      '\n'
+      '# Fields ahve to be separated by a single comma and nothing else. No trailing comma at the end of the line!\n'
+      'fields' : 'startTime,endTime,description,tags'
+   }
 
-   pass
+   with open("./config.ini", 'w') as configfile:
+      defaultConfig.write(configfile)
+
+
 
 
 # {{{ CSV Import / Export should be a separate tool, nut a built in...
@@ -54,6 +73,7 @@ def initDB(config: configparser.ConfigParser, pathToDB: Path | str, logArgs: dic
 
    connection.commit()
    cursor.close()
+
    connection.close()
 
 def updateDB(db):
@@ -158,11 +178,11 @@ def endTimeLog(config: configparser.ConfigParser, rowid: int, logArgs: dict, con
    '''
    
    localLogArgs = logArgs
-   localConnection :sqlite3.Connection | str
+   localConnection :sqlite3.Connection
 
    # {{{ If there's no connection passed create one to the current db
    if connection == "":
-      storage = config["settings"]["storeDataHere"]
+      storage = config["settings"]["storedatahere"]
       pathToCurrentLogFile = f"{storage}/{localLogArgs["startTime"].tm_year}-{localLogArgs["startTime"].tm_mon}.timelog"
       connection = sqlite3.connect(pathToCurrentLogFile)
       connection.row_factory = sqlite3.Row # Queries now return Row objects
@@ -232,12 +252,17 @@ def deleteTimeLog():
 
 def main():
 
-   #importing config
+   #importing config or init the default one, if there's none
    config = configparser.ConfigParser()
-   _ =config.read("./config.ini")
+   if Path("./config.ini").exists():
+      _ =config.read("./config.ini")
+   else:
+      print("NO!!!")
+      initDefConfig()
+      _ =config.read("./config.ini")
 
    #init storage folder:
-   storage = config["settings"]["storeDataHere"]
+   storage = config["settings"]["storedatahere"]
    if (storage == ""):
       storage = Path.home() / ".logLanceData"
 
@@ -247,14 +272,14 @@ def main():
          config["settings"]["storeDateHere"] = str(storage)
          print(f"{storage} created!")
    elif not Path(storage).is_dir():
-      print(f"The path you've given in config.ini -> storeDataHere:\n({storage})\nis invalid!\nPlease make sure the folder exists and that the path is correct")
+      print(f"The path you've given in config.ini -> storedatahere:\n({storage})\nis invalid!\nPlease make sure the folder exists and that the path is correct")
       exit("err: invalid storage folder path")
 
 
-   timeFormatInStorage = config["settings"]["timeFormatInStorage"]
-   currentTime = time.localtime()
+   timeformatinstorage = config["settings"]["timeformatinstorage"]
+   currentTime = time.gmtime() # Storing time info in gmt. This should be converted into time.localtime() when displaying to the user
 
-   formattedTime = time.strftime(timeFormatInStorage, currentTime)
+   formattedTime = time.strftime(timeformatinstorage, currentTime)
 
    pathToCurrentLogFile = f"{storage}/{currentTime.tm_year}-{currentTime.tm_mon}.timelog"
 
@@ -285,10 +310,11 @@ def main():
    connection.row_factory = sqlite3.Row # Queries now return Row objects
    #}}}
 
+
    startTimeLog(config= config, connection= connection, logArgs= logArgs)
 
    ## {{{ Testing params
-   # thePast = time.strptime("24-04-15 Mon 11:30:59", timeFormatInStorage)
+   # thePast = time.strptime("24-04-15 Mon 11:30:59", timeformatinstorage)
    ## }}}
    # print(calcTimeDiff(thePast, currentTime))
 
