@@ -45,11 +45,16 @@ def initDB(config: configparser.ConfigParser, pathToDB: Path | str, logArgs: dic
 
    try:
       cursor.execute(f"CREATE TABLE logsTable({", ".join(columns)})")
-   except:
-      print("logLancer is trying to create an already existing table in the function 'initDB()'")
+
+   except Exception as e:
+      print(f"logLancer is trying to create an already existing table in the function 'initDB()'\n\nException:\n{e}")
 
    # res = cursor.execute("SELECT name FROM sqlite_master")
    # print(res.fetchone())
+
+   connection.commit()
+   cursor.close()
+   connection.close()
 
 def updateDB(db):
    '''
@@ -98,84 +103,96 @@ def writeLogToLogFile(pathToLogFile: Path | str, log: dict):
 
 # {{{ User Facing functions
 
-def startTimeLog(config: configparser.ConfigParser, pathToCurrentLogFile: Path | str, logArgs: dict):
+def startTimeLog(config: configparser.ConfigParser, connection: sqlite3.Connection, logArgs: dict):
    '''
-   Creates a new entry in the current log file with all the needed data.
-   If there's no current log file, it creates a new one.
+   Puts an endTime on the latest entry w/o an endTime (if there's any) then,
+   creates a new entry in the current log file with all the needed data.
    '''
 
-   # Is there a current logFile at the given path?
-   if not Path(pathToCurrentLogFile).exists():
-   ## No:
-      ## init one
-      initDB(config = config, pathToDB= pathToCurrentLogFile, logArgs= logArgs)
-      ## create new timeLogEntry
-      connection = sqlite3.connect(pathToCurrentLogFile)
-      cursor = connection.cursor()
-
-      row = ""
-      for key in logArgs.keys():
-         if isinstance(logArgs[f'{key}'], list):
-            row+= f"'{"; ".join(logArgs[f'{key}'])}', "
-         elif isinstance(logArgs[f'{key}'], str):
-            row+= f"'{logArgs[f'{key}']}', "
-         elif isinstance(logArgs[f'{key}'], (int, float, complex)) and not  isinstance(logArgs[f'{key}'], bool):
-            row+= f"{logArgs[f'{key}']}, "
-         elif isinstance(logArgs[f'{key}'], bool):
-            row+= f"{logArgs[f'{key}']}, "
-         else:
-            print(f"{key} in your log arguments is a (hopefully sqlite3 compatible) datatype that the dumbasss dev of this project didn't think about,\nplease open an issue on the project's github...")
-            exit()
-
-
-      row = row[:-2]
-
-      print(f"This is the row:\n<{row}>\n================================")
-
-      cursor.execute(f"""
-         INSERT INTO logsTable VALUES
-            ({row})
-      """)
-
-      ## writeLogToLogFile()
-      connection.commit()
-      # print(cursor.execute("SELECT * FROM logsTable").fetchall())
-      return
-   
-
-   # Get last log
-
-   connection = sqlite3.connect(pathToCurrentLogFile)
    cursor = connection.cursor()
-   
+
    # Check for running task -> is there one?
-   if cursor.execute("SELECT endTime FROM logsTable").fetchall()[-1][0] == '':
-      ## Yes:
-      ## endTimeLog()
-      print(cursor.execute("SELECT rowid FROM logsTable").fetchall()[-1])
-   ### create new timeLogEntry
-   ### write to currentTimeLogFile
-   ## No:
-   ### create new timeLogEntry
-   ### writeLogToLogFile()
+   try:
+      lastRow = cursor.execute("SELECT rowid, endTime FROM logsTable").fetchall()[-1]
+      if lastRow["endTime"] == "": # this line checks the value of the endTime field. If it's empty that means that the task is still running.
+         ## Yes:
+         print(f"!!!- LogArgs: {logArgs}")
+         endTimeLog(config = config, connection= connection, logArgs= logArgs, rowid= lastRow["rowid"])
+         print(f"!!!+ LogArgs: {logArgs}")
+         # print(list(cursor.execute("SELECT rowid FROM logsTable").fetchall()[-1]))
+   except Exception as e:
+      msg = "No entries in database; skipping endTime check"
+      print(f"---\nAn exception occured:\n- {e}\nGuess:\n- {msg}\n---\n")
+
+   ## create new timeLogEntry
+
+   dynamicTokens = ""
+   for key in logArgs.keys():
+      dynamicTokens += f":{key}, "
+      if isinstance(logArgs[f'{key}'], list):
+            logArgs[f'{key}'] = f"{"; ".join(logArgs[f'{key}'])}"
+
+   dynamicTokens = dynamicTokens[:-2]
+
+   
+
+   addNewRow = f"""
+      INSERT INTO logsTable VALUES
+         ({dynamicTokens})
+   """
+   _ = cursor.execute(addNewRow, logArgs)
+   
+   print("============================================\nNew row added:")
+   ## writeLogToLogFile()
+   connection.commit()
+
+   print(list(cursor.execute("SELECT rowid, * FROM logsTable").fetchall()[-1]))
+
+   cursor.close()
+   return
 
 
-   pass
-
-def endTimeLog(config: configparser.ConfigParser, pathToCurrentLogFile: Path | str):
+def endTimeLog(config: configparser.ConfigParser, connection: sqlite3.Connection, rowid: int, logArgs: dict): # TODO: Add new func variables: "connection" "cursor". if these are not provided give them a blank string as value and deal with it below.
    '''
    Insert end dateTime to the passed log in the current log file
    '''
    
-   # Get last log
+   localLogArgs = logArgs
+   # Get log
+   cursor = connection.cursor()
+   row = cursor.execute(f"SELECT endTime FROM logsTable WHERE rowid = {rowid}").fetchone()
    # Check whether it has an end time
-   ## Yes:
-   ### Throw warning
-   ## No:
-   ### add end time to timeLog
-   ### writeLogToLogFile()
+   if row["endTime"] != '':
+      ## Yes:
+      ## Throw warning
+      msg = "This entry already has an end time"
+      print(msg)
+      return
+   else:
+      ## No:
+      dynamicTokens = ""
+      for key in localLogArgs.keys():
+         dynamicTokens += f"{key} = :{key}, "
+         if isinstance(localLogArgs[f'{key}'], list):
+               localLogArgs[f'{key}'] = f"{"; ".join(localLogArgs[f'{key}'])}"
 
-   pass
+      dynamicTokens = dynamicTokens[:-2]
+
+      localLogArgs["endTime"] = localLogArgs["startTime"] # startTime is set when calling the main function, so it can be used as end time here.
+
+      editRow = f"""
+         UPDATE logsTable SET {dynamicTokens} WHERE rowid = {rowid}
+      """
+
+      ## add end time to timeLog
+      _ = cursor.execute(editRow, localLogArgs)
+
+      ## writeLogToLogFile()
+      connection.commit()
+      print("==============================\nRow with added end time:")
+      print(list(cursor.execute("SELECT rowid, * FROM logsTable").fetchall()[-1]))
+
+      cursor.close()
 
 def modifTimeLog():
 
@@ -227,13 +244,28 @@ def main():
    logArgs["tags"] = tags
    
 
-   startTimeLog(config= config, pathToCurrentLogFile= pathToCurrentLogFile, logArgs= logArgs)
+   
+   # Is there a current logFile at the given path?
+   if not Path(pathToCurrentLogFile).exists():
+   ## No:
+      ## init one
+      msg = "No existing database found for the provided time period; creating new one..."
+      print(msg)
+      initDB(config = config, pathToDB= pathToCurrentLogFile, logArgs= logArgs)
+
+   #{{{ open and setup connection to time log database
+   connection = sqlite3.connect(pathToCurrentLogFile)
+   connection.row_factory = sqlite3.Row # Queries now return Row objects
+   #}}}
+
+   startTimeLog(config= config, connection= connection, logArgs= logArgs)
 
    ## {{{ Testing params
    # thePast = time.strptime("24-04-15 Mon 11:30:59", timeFormatInStorage)
    ## }}}
    # print(calcTimeDiff(thePast, currentTime))
 
+   connection.close()
    return
 
 #========================#
