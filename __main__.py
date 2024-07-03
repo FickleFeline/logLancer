@@ -112,17 +112,17 @@ def startTimeLog(config: configparser.ConfigParser, connection: sqlite3.Connecti
    cursor = connection.cursor()
 
    # Check for running task -> is there one?
+
    try:
       lastRow = cursor.execute("SELECT rowid, endTime FROM logsTable").fetchall()[-1]
       if lastRow["endTime"] == "": # this line checks the value of the endTime field. If it's empty that means that the task is still running.
          ## Yes:
-         print(f"!!!- LogArgs: {logArgs}")
          endTimeLog(config = config, connection= connection, logArgs= logArgs, rowid= lastRow["rowid"])
-         print(f"!!!+ LogArgs: {logArgs}")
          # print(list(cursor.execute("SELECT rowid FROM logsTable").fetchall()[-1]))
    except Exception as e:
       msg = "No entries in database; skipping endTime check"
       print(f"---\nAn exception occured:\n- {e}\nGuess:\n- {msg}\n---\n")
+
 
    ## create new timeLogEntry
 
@@ -134,34 +134,50 @@ def startTimeLog(config: configparser.ConfigParser, connection: sqlite3.Connecti
 
    dynamicTokens = dynamicTokens[:-2]
 
-   
-
    addNewRow = f"""
       INSERT INTO logsTable VALUES
          ({dynamicTokens})
    """
    _ = cursor.execute(addNewRow, logArgs)
    
-   print("============================================\nNew row added:")
+
    ## writeLogToLogFile()
+
    connection.commit()
 
-   print(list(cursor.execute("SELECT rowid, * FROM logsTable").fetchall()[-1]))
+   # print("============================================\nNew row added:")
+   # print(list(cursor.execute("SELECT rowid, * FROM logsTable").fetchall()[-1]))
 
    cursor.close()
    return
 
 
-def endTimeLog(config: configparser.ConfigParser, connection: sqlite3.Connection, rowid: int, logArgs: dict): # TODO: Add new func variables: "connection" "cursor". if these are not provided give them a blank string as value and deal with it below.
+def endTimeLog(config: configparser.ConfigParser, rowid: int, logArgs: dict, connection: sqlite3.Connection | str = ""): # TODO: Add func variables: "connection". if these are not provided give them a blank string as value and deal with it below.
    '''
    Insert end dateTime to the passed log in the current log file
    '''
    
    localLogArgs = logArgs
+   localConnection :sqlite3.Connection | str
+
+   # {{{ If there's no connection passed create one to the current db
+   if connection == "":
+      storage = config["settings"]["storeDataHere"]
+      pathToCurrentLogFile = f"{storage}/{localLogArgs["startTime"].tm_year}-{localLogArgs["startTime"].tm_mon}.timelog"
+      connection = sqlite3.connect(pathToCurrentLogFile)
+      connection.row_factory = sqlite3.Row # Queries now return Row objects
+   else:
+      localConnection = connection
+   # }}}
+
    # Get log
-   cursor = connection.cursor()
-   row = cursor.execute(f"SELECT endTime FROM logsTable WHERE rowid = {rowid}").fetchone()
+
+   cursor = localConnection.cursor()
+   row = cursor.execute(f"SELECT rowid, * FROM logsTable WHERE rowid = {rowid}").fetchone()
+
+
    # Check whether it has an end time
+
    if row["endTime"] != '':
       ## Yes:
       ## Throw warning
@@ -170,29 +186,39 @@ def endTimeLog(config: configparser.ConfigParser, connection: sqlite3.Connection
       return
    else:
       ## No:
+      editedRow = {}
       dynamicTokens = ""
-      for key in localLogArgs.keys():
-         dynamicTokens += f"{key} = :{key}, "
-         if isinstance(localLogArgs[f'{key}'], list):
-               localLogArgs[f'{key}'] = f"{"; ".join(localLogArgs[f'{key}'])}"
+      for key in row.keys():
+         if key != "rowid" or key != "endTime":
+            dynamicTokens += f"{key} = :{key}, "
+            editedRow[f'{key}'] = row[f'{key}']
+
+      editedRow["endTime"] = localLogArgs["startTime"]
 
       dynamicTokens = dynamicTokens[:-2]
-
-      localLogArgs["endTime"] = localLogArgs["startTime"] # startTime is set when calling the main function, so it can be used as end time here.
 
       editRow = f"""
          UPDATE logsTable SET {dynamicTokens} WHERE rowid = {rowid}
       """
 
+      
       ## add end time to timeLog
-      _ = cursor.execute(editRow, localLogArgs)
+
+      _ = cursor.execute(editRow, editedRow)
+
 
       ## writeLogToLogFile()
-      connection.commit()
-      print("==============================\nRow with added end time:")
-      print(list(cursor.execute("SELECT rowid, * FROM logsTable").fetchall()[-1]))
+
+      localConnection.commit()
+      # print("==============================\nRow with added end time:")
+      # print(list(cursor.execute("SELECT rowid, * FROM logsTable").fetchall()[-1]))
 
       cursor.close()
+
+      # {{{ if there was no connection passed in the function call close previously created connection
+      if connection == "":
+         localConnection.close()
+      # }}}
 
 def modifTimeLog():
 
@@ -218,6 +244,7 @@ def main():
       # Create storage folder if it doesn't already exist
       if not Path(storage).is_dir():
          storage.mkdir()
+         config["settings"]["storeDateHere"] = str(storage)
          print(f"{storage} created!")
    elif not Path(storage).is_dir():
       print(f"The path you've given in config.ini -> storeDataHere:\n({storage})\nis invalid!\nPlease make sure the folder exists and that the path is correct")
@@ -225,7 +252,7 @@ def main():
 
 
    timeFormatInStorage = config["settings"]["timeFormatInStorage"]
-   currentTime = time.gmtime()
+   currentTime = time.localtime()
 
    formattedTime = time.strftime(timeFormatInStorage, currentTime)
 
