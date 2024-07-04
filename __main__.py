@@ -124,6 +124,7 @@ def updateDBRow(connection: sqlite3.Connection, rowToUpdate: sqlite3.Row , updat
    '''
    Updates row in the database using the current connection,
    based on available fields in the provided dictionary.
+   (Dict keys are CASE SENSITIVE)
    '''
 
    cursor = connection.cursor()
@@ -134,7 +135,7 @@ def updateDBRow(connection: sqlite3.Connection, rowToUpdate: sqlite3.Row , updat
    for key in rowToUpdate.keys(): # In theory this block should prevent sql injections bc this way the operation uses placeholder tokens (instead of using f"strings" for adding variable values into it)??
       if key != "rowid":
          dynamicTokens += f"{key} = :{key}, "
-         if " ".join(rowToUpdate.keys()).find(key) == -1: # If the key can't be found in the updatedFieldsAsDict's keys, just copy rowToUpdate's values.
+         if " ".join(updatedFieldsAsDict.keys()).find(key) == -1: # If the key can't be found in the updatedFieldsAsDict's keys, just copy rowToUpdate's values.
             editedRow[f'{key}'] = rowToUpdate[f'{key}']
          else:
             editedRow[f'{key}'] = updatedFieldsAsDict[f'{key}']
@@ -151,12 +152,10 @@ def updateDBRow(connection: sqlite3.Connection, rowToUpdate: sqlite3.Row , updat
 
    ## writeLogToLogFile()
    connection.commit()
-   # print("==============================\nRow with added end time:")
+   # print("==============================\nRow with added edited fields:")
    # print(list(cursor.execute("SELECT rowid, * FROM logsTable").fetchall()[-1]))
 
    cursor.close()
-
-   return 0
 
 # }}} End of Helper funcitons
 
@@ -172,15 +171,16 @@ def startTimeLog(config: configparser.ConfigParser, connection: sqlite3.Connecti
 
    # Check for running task -> is there one?
 
-   try:
+   # try:
+   if True:
       lastRow = cursor.execute("SELECT rowid, * FROM logsTable").fetchall()[-1]
       if lastRow["endTime"] == "": # this line checks the value of the endTime field. If it's empty that means that the task is still running.
          ## Yes:
          endTimeLog(config = config, connection= connection, logArgs= logArgs, row = lastRow)
          # print(list(cursor.execute("SELECT rowid FROM logsTable").fetchall()[-1]))
-   except Exception as e:
-      msg = "No entries in database; skipping endTime check"
-      print(f"---\nAn exception occured:\n- {e}\nGuess:\n- {msg}\n---\n")
+   # except Exception as e:
+   #    msg = "No entries in database; skipping endTime check"
+   #    print(f"---\nAn exception occured:\n- {e}\nGuess:\n- {msg}\n---\n")
 
 
    ## create new timeLogEntry
@@ -231,9 +231,6 @@ def endTimeLog(config: configparser.ConfigParser, row:sqlite3.Row , logArgs: dic
 
    # Get log
 
-   cursor = localConnection.cursor()
-
-
    # Check whether it has an end time
 
    if row["endTime"] != '':
@@ -244,34 +241,11 @@ def endTimeLog(config: configparser.ConfigParser, row:sqlite3.Row , logArgs: dic
       return
    else:
       ## No:
-      editedRow = {}
-      dynamicTokens = ""
-      for key in row.keys():
-         if key != "rowid" or key != "endTime":
-            dynamicTokens += f"{key} = :{key}, "
-            editedRow[f'{key}'] = row[f'{key}']
+      addedEndTime = {"endTime" : localLogArgs["startTime"]}
+      updateDBRow(connection= connection, rowToUpdate= row, updatedFieldsAsDict=addedEndTime)
 
-      editedRow["endTime"] = localLogArgs["startTime"]
-
-      dynamicTokens = dynamicTokens[:-2]
-
-      editRow = f"""
-         UPDATE logsTable SET {dynamicTokens} WHERE rowid = {row['rowid']}
-      """
-
-      
-      ## add end time to timeLog
-
-      _ = cursor.execute(editRow, editedRow)
-
-
-      ## writeLogToLogFile()
-
-      localConnection.commit()
       # print("==============================\nRow with added end time:")
       # print(list(cursor.execute("SELECT rowid, * FROM logsTable").fetchall()[-1]))
-
-      cursor.close()
 
       # {{{ if there was no connection passed in the function call close previously created connection
       if connection == "":
@@ -295,7 +269,6 @@ def main():
    if Path("./config.ini").exists():
       _ =config.read("./config.ini")
    else:
-      print("NO!!!")
       initDefConfig()
       _ =config.read("./config.ini")
 
