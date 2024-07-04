@@ -119,6 +119,45 @@ def writeLogToLogFile(pathToLogFile: Path | str, log: dict):
    '''
 
    pass
+
+def updateDBRow(connection: sqlite3.Connection, rowToUpdate: sqlite3.Row , updatedFieldsAsDict: dict):
+   '''
+   Updates row in the database using the current connection,
+   based on available fields in the provided dictionary.
+   '''
+
+   cursor = connection.cursor()
+
+   # {{{ Prepping the sql command for execution in a safe way™️(?)
+   editedRow = {}
+   dynamicTokens = ""
+   for key in rowToUpdate.keys(): # In theory this block should prevent sql injections bc this way the operation uses placeholder tokens (instead of using f"strings" for adding variable values into it)??
+      if key != "rowid":
+         dynamicTokens += f"{key} = :{key}, "
+         if " ".join(rowToUpdate.keys()).find(key) == -1: # If the key can't be found in the updatedFieldsAsDict's keys, just copy rowToUpdate's values.
+            editedRow[f'{key}'] = rowToUpdate[f'{key}']
+         else:
+            editedRow[f'{key}'] = updatedFieldsAsDict[f'{key}']
+
+   dynamicTokens = dynamicTokens[:-2]
+
+   editRow = f"""
+      UPDATE logsTable SET {dynamicTokens} WHERE rowid = {rowToUpdate['rowid']}
+   """
+   # }}}
+
+   ## add end time to timeLog
+   _ = cursor.execute(editRow, editedRow)
+
+   ## writeLogToLogFile()
+   connection.commit()
+   # print("==============================\nRow with added end time:")
+   # print(list(cursor.execute("SELECT rowid, * FROM logsTable").fetchall()[-1]))
+
+   cursor.close()
+
+   return 0
+
 # }}} End of Helper funcitons
 
 # {{{ User Facing functions
@@ -134,10 +173,10 @@ def startTimeLog(config: configparser.ConfigParser, connection: sqlite3.Connecti
    # Check for running task -> is there one?
 
    try:
-      lastRow = cursor.execute("SELECT rowid, endTime FROM logsTable").fetchall()[-1]
+      lastRow = cursor.execute("SELECT rowid, * FROM logsTable").fetchall()[-1]
       if lastRow["endTime"] == "": # this line checks the value of the endTime field. If it's empty that means that the task is still running.
          ## Yes:
-         endTimeLog(config = config, connection= connection, logArgs= logArgs, rowid= lastRow["rowid"])
+         endTimeLog(config = config, connection= connection, logArgs= logArgs, row = lastRow)
          # print(list(cursor.execute("SELECT rowid FROM logsTable").fetchall()[-1]))
    except Exception as e:
       msg = "No entries in database; skipping endTime check"
@@ -172,7 +211,7 @@ def startTimeLog(config: configparser.ConfigParser, connection: sqlite3.Connecti
    return
 
 
-def endTimeLog(config: configparser.ConfigParser, rowid: int, logArgs: dict, connection: sqlite3.Connection | str = ""): # TODO: Add func variables: "connection". if these are not provided give them a blank string as value and deal with it below.
+def endTimeLog(config: configparser.ConfigParser, row:sqlite3.Row , logArgs: dict, connection: sqlite3.Connection | str = ""):
    '''
    Insert end dateTime to the passed log in the current log file
    '''
@@ -184,8 +223,8 @@ def endTimeLog(config: configparser.ConfigParser, rowid: int, logArgs: dict, con
    if connection == "":
       storage = config["settings"]["storedatahere"]
       pathToCurrentLogFile = f"{storage}/{localLogArgs["startTime"].tm_year}-{localLogArgs["startTime"].tm_mon}.timelog"
-      connection = sqlite3.connect(pathToCurrentLogFile)
-      connection.row_factory = sqlite3.Row # Queries now return Row objects
+      localConnection = sqlite3.connect(pathToCurrentLogFile)
+      localConnection.row_factory = sqlite3.Row # Queries now return Row objects
    else:
       localConnection = connection
    # }}}
@@ -193,7 +232,6 @@ def endTimeLog(config: configparser.ConfigParser, rowid: int, logArgs: dict, con
    # Get log
 
    cursor = localConnection.cursor()
-   row = cursor.execute(f"SELECT rowid, * FROM logsTable WHERE rowid = {rowid}").fetchone()
 
 
    # Check whether it has an end time
@@ -218,7 +256,7 @@ def endTimeLog(config: configparser.ConfigParser, rowid: int, logArgs: dict, con
       dynamicTokens = dynamicTokens[:-2]
 
       editRow = f"""
-         UPDATE logsTable SET {dynamicTokens} WHERE rowid = {rowid}
+         UPDATE logsTable SET {dynamicTokens} WHERE rowid = {row['rowid']}
       """
 
       
