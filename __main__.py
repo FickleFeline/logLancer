@@ -4,8 +4,9 @@ import sqlite3                   # to store/edit time logs in sqlite files
 import time                      # for time stuff
 from datetime import timedelta   # also for time stuff
 import argparse                  # for parsing CLI arguments
+# import pandas as pd              # to display dicts nicely on CLI
 # import csv                     # to import/export the sqlite db to csv files
-# import textual
+# import textual                  # for creating a TUI
 
 
 # {{{ Classes
@@ -132,6 +133,8 @@ def updateDBRow(connection: sqlite3.Connection, rowToUpdate: sqlite3.Row , updat
    Updates row in the database using the current connection,
    based on available fields in the provided dictionary.
    (Dict keys are CASE SENSITIVE)
+
+   Returns the updated row as a dictionary
    '''
 
    cursor = connection.cursor()
@@ -163,6 +166,7 @@ def updateDBRow(connection: sqlite3.Connection, rowToUpdate: sqlite3.Row , updat
    # print(list(cursor.execute("SELECT rowid, * FROM logsTable").fetchall()[-1]))
 
    cursor.close()
+   return editedRow
 
 # obsolete # def getTestInput():
 # obsolete # 
@@ -257,10 +261,10 @@ def getUserInput(config: configparser.ConfigParser):
 
    # TODO: Get commandlilne (and/or TUI) arguments. i.e.: tags, description, etc...
    # Two ways to get user inputs:
-   # - [/] using CLI
+   # 1) [/] using CLI
    # -- [x] Burnt in fields
-   # -- [ ] Dynamic fields and extension required inputs
-   # - [ ] using Textual TUI
+   # -- [ ] Dynamic fields and extension required inputs !!!
+   # 2) [ ] using Textual TUI
    # -- This route first has to have a MWP Textual TUI that lets the user call sth like "start new time log" function that then prompts them to input params
 
 
@@ -357,10 +361,12 @@ def endTimeLog(config: configparser.ConfigParser, row:sqlite3.Row , logArgs: dic
    else:
       ## No:
       addedEndTime = {"endTime" : localLogArgs["startTime"]}
-      updateDBRow(connection= connection, rowToUpdate= row, updatedFieldsAsDict=addedEndTime)
+      row = updateDBRow(connection= connection, rowToUpdate= row, updatedFieldsAsDict=addedEndTime)
 
       # print("==============================\nRow with added end time:")
       # print(list(cursor.execute("SELECT rowid, * FROM logsTable").fetchall()[-1]))
+
+      detailTimeLog(config= config, row= row)
 
 
 def editTimeLog():
@@ -370,6 +376,28 @@ def editTimeLog():
 def deleteTimeLog():
 
    pass
+
+def detailTimeLog(config: configparser.ConfigParser, row: sqlite3.Row):
+   '''
+   Print the passed db row to the screen
+   '''
+
+   timeFormatInStorage = config["settings"]["timeFormatInStorage"]
+   timeFormatDisplayed = config["settings"]["timeFormatDisplayed"]
+   
+   this = {}
+
+   for key in row.keys():
+      this[f'{key}'] = row[f'{key}']
+
+   this["startTime"] = (time.strftime(timeFormatDisplayed, time.strptime(this["startTime"], timeFormatInStorage)))
+   this["endTime"] = (time.strftime(timeFormatDisplayed, time.strptime(this["endTime"], timeFormatInStorage)))
+   
+   print("===\nEnded log's details:")
+   print(''.join('{}:\n- {}\n'.format(key, val) for key, val in this.items())[:-1])
+   print("===")
+
+
 
 # }}} End of User Facing functions
 
