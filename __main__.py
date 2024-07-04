@@ -10,8 +10,10 @@ from datetime import timedelta   # also for time stuff
 # {{{ Helper functions
 
 def initDefConfig():
+   '''
+   Initiates a default logLancer configuration at the root folder of the program.
+   '''
 
-   # TODO: Write a function that creates a default config file
    defaultConfig= configparser.ConfigParser(allow_no_value=True)
    defaultConfig['settings'] = {
       '\n'
@@ -23,7 +25,7 @@ def initDefConfig():
       '# If left blank it defaults to ~/.logLancerData\n'
       'storedatahere' : ''
    }
-   defaultConfig['expansions'] = {
+   defaultConfig['extensions'] = {
       '\n'
       '# Fields ahve to be separated by a single comma and nothing else. No trailing comma at the end of the line!\n'
       'fields' : 'startTime,endTime,description,tags'
@@ -157,9 +159,51 @@ def updateDBRow(connection: sqlite3.Connection, rowToUpdate: sqlite3.Row , updat
 
    cursor.close()
 
+def getTestInput():
+
+   
+   #{{{ PLACHOLDER VARIABLES TO BE EVENTUALLY CHANGED INTO logArgs
+   description = "this is a task description"
+   tags = ["FT", "00"]
+   #}}}
+
+   config = configparser.ConfigParser()
+   _ =config.read("./config.ini")
+   timeformatinstorage = config["settings"]["timeformatinstorage"]
+   currentTime = time.gmtime() # Storing time info in gmt. This should be converted into time.localtime() when displaying to the user
+   formattedTime = time.strftime(timeformatinstorage, currentTime)
+
+   testInput:dict[str, int|str|list[int|str]] = {}
+   testInput["startTime"] = formattedTime
+   testInput["endTime"] = ""
+   testInput["description"] = description
+   testInput["tags"] = tags
+
+   return testInput
+
 # }}} End of Helper funcitons
 
 # {{{ User Facing functions
+def getUserInput(config: configparser.ConfigParser):
+
+   # TODO: Get commandlilne (and/or TUI) arguments. i.e.: tags, description, etc...
+   # Two ways to get user inputs:
+   # - [ ] using CLI
+   # - [ ] using Textual TUI
+   # -- This route first has to have a MWP Textual TUI that lets the user call sth like "start new time log" function that then prompts them to input params
+
+   userInput = getTestInput()
+   formattedUserInput = {}
+
+   for key in config["extensions"]["fields"].split(','):
+      # print(f"Key: {key}")
+      if " ".join(userInput.keys()).find(key) != -1: # If the field has a user input value assign it, otherwise assigne an empty string as value
+         formattedUserInput[f'{key}'] = userInput[f'{key}']
+      else:
+         formattedUserInput[f'{key}'] = ''
+
+
+   return formattedUserInput
 
 def startTimeLog(config: configparser.ConfigParser, connection: sqlite3.Connection, logArgs: dict):
    '''
@@ -171,16 +215,15 @@ def startTimeLog(config: configparser.ConfigParser, connection: sqlite3.Connecti
 
    # Check for running task -> is there one?
 
-   # try:
-   if True:
+   try:
       lastRow = cursor.execute("SELECT rowid, * FROM logsTable").fetchall()[-1]
       if lastRow["endTime"] == "": # this line checks the value of the endTime field. If it's empty that means that the task is still running.
          ## Yes:
          endTimeLog(config = config, connection= connection, logArgs= logArgs, row = lastRow)
          # print(list(cursor.execute("SELECT rowid FROM logsTable").fetchall()[-1]))
-   # except Exception as e:
-   #    msg = "No entries in database; skipping endTime check"
-   #    print(f"---\nAn exception occured:\n- {e}\nGuess:\n- {msg}\n---\n")
+   except Exception as e:
+      msg = "No entries in database; skipping endTime check"
+      print(f"---\nAn exception occured:\n- {e}\nGuess:\n- {msg}\n---\n")
 
 
    ## create new timeLogEntry
@@ -213,7 +256,7 @@ def startTimeLog(config: configparser.ConfigParser, connection: sqlite3.Connecti
 
 def endTimeLog(config: configparser.ConfigParser, row:sqlite3.Row , logArgs: dict, connection: sqlite3.Connection):
    '''
-   Insert end dateTime to the passed log in the current log file
+   Insert end time to the passed log in the current log file
    '''
    
    localLogArgs = logArgs
@@ -275,21 +318,14 @@ def main():
    timeformatinstorage = config["settings"]["timeformatinstorage"]
    currentTime = time.gmtime() # Storing time info in gmt. This should be converted into time.localtime() when displaying to the user
 
+   lcTime = time.localtime(time.mktime(currentTime)) # current local time
    formattedTime = time.strftime(timeformatinstorage, currentTime)
 
-   pathToCurrentLogFile = f"{storage}/{currentTime.tm_year}-{currentTime.tm_mon}.timelog"
+   pathToCurrentLogFile = f"{storage}/{lcTime.tm_year}-{lcTime.tm_mon}.timelog"
+   del lcTime
 
-   # TODO: Get commandlilne (and/or TUI) arguments. i.e.: tags, description, etc...
-   #{{{ PLACHOLDER VARIABLES TO BE EVENTUALLY CHANGED INTO logArgs
-   description = "this is a task description"
-   tags = ["FT", "00"]
-   #}}}
 
-   logArgs = {}
-   logArgs["startTime"] = formattedTime
-   logArgs["endTime"] = ""
-   logArgs["desc"] = description
-   logArgs["tags"] = tags
+   logArgs = getUserInput(config)
    
 
    
