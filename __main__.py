@@ -3,9 +3,9 @@ import configparser              # to create / read config file
 import sqlite3                   # to store/edit time logs in sqlite files
 import time                      # for time stuff
 from datetime import timedelta   # also for time stuff
-# import csv                       # to import/export the sqlite db to csv files
+import argparse                  # for parsing CLI arguments
+# import csv                     # to import/export the sqlite db to csv files
 # import textual
-# import argparse
 
 # {{{ Helper functions
 
@@ -183,6 +183,59 @@ def getTestInput():
 
 # }}} End of Helper funcitons
 
+#{{{ TUI/CLI Shenanigans
+
+def parseCLI():
+   '''
+   Handle user input from the command line or lack there of
+   '''
+
+   # TODO: Dynamically add arguments so that extensions can add their won!
+
+   # Adding basic info about the app
+   parser = argparse.ArgumentParser(
+      prog="logLancer",
+      description="A flexible terminal tool for keeping time logs of your activities",
+      epilog="=== Yeah... ==="
+   )
+
+   # {{{ Adding arguments
+   _ = parser.add_argument("-s",
+                           "--startLog",
+                           help = "End any currently running logs and start a new one",
+                           action = "store_true")
+
+   _ = parser.add_argument("-e",
+                           "--endLog",
+                           help = "Add an end time to the latest log, if it is still, running",
+                           action= "store_true")
+
+   _ = parser.add_argument("-t",
+                           "--tags",
+                           type= str,
+                           help = "Define tags (separated by `, `) on the selected entry \n(on using -s/--startLog for eg.)",)
+   # }}} End of Adding arguments
+   args = parser.parse_args()
+   
+   if args.startLog:
+      print("`-s` recieved!")
+   if args.endLog:
+      print("`-e` recieved!")
+   if args.tags is not None:
+      # TODO: When processing tags take escape characters into account
+      # E.g.: "foo, bar, beer, one\, single\, tag"
+      # Bc rn escaped commas aren't really escaped: when splitting the tags
+      # arg into a list it ignors the effect `\` should have on text...
+      print(f"Tags as read:\n- {args.tags}\nTags as list:\n- {args.tags.split(", ")}")
+
+   pass
+
+def initTTUI(): # initTextualTerminalUserInterface
+
+   pass
+
+#}}} End of TUI/CLI Shenanigans
+
 # {{{ User Facing functions
 def getUserInput(config: configparser.ConfigParser):
 
@@ -342,8 +395,8 @@ def main():
    connection.row_factory = sqlite3.Row # Queries now return Row objects
    #}}}
 
-
-   startTimeLog(config= config, connection= connection, logArgs= logArgs)
+   parseCLI()
+   # startTimeLog(config= config, connection= connection, logArgs= logArgs)
 
    ## {{{ Testing params
    # thePast = time.strptime("24-04-15 Mon 11:30:59", timeformatinstorage)
