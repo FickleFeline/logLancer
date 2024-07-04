@@ -7,6 +7,11 @@ import argparse                  # for parsing CLI arguments
 # import csv                     # to import/export the sqlite db to csv files
 # import textual
 
+
+# {{{ Classes
+
+# }}} End of Classes
+
 # {{{ Helper functions
 
 def initDefConfig():
@@ -190,45 +195,56 @@ def parseCLI():
    Handle user input from the command line or lack there of
    '''
 
-   # TODO: Dynamically add arguments so that extensions can add their won!
+   # TODO: Dynamically add arguments so that extensions can add their own!
 
    # Adding basic info about the app
    parser = argparse.ArgumentParser(
       prog="logLancer",
       description="A flexible terminal tool for keeping time logs of your activities",
-      epilog="=== Yeah... ==="
+      epilog="=== Yeah... 🦆 ==="
    )
+
 
    # {{{ Adding arguments
    _ = parser.add_argument("-s",
                            "--startLog",
-                           help = "End any currently running logs and start a new one",
+                           help = "End any currently running logs and start a new one and any additional arguments will edit this newly created entry",
                            action = "store_true")
 
    _ = parser.add_argument("-e",
                            "--endLog",
-                           help = "Add an end time to the latest log, if it is still, running",
+                           help = "Add an end time to the latest log, if it is still, running (and any additional arguments will edit this newly created entry?)",
                            action= "store_true")
 
    _ = parser.add_argument("-t",
                            "--tags",
                            type= str,
-                           help = "Define tags (separated by `, `) on the selected entry \n(on using -s/--startLog for eg.)",)
+                           help = "Define tags (separated by `, `) on the selected entry \n(on using -s/--startLog for eg.)",
+                           action= "extend",
+                           nargs= "+",)
+
+   _ = parser.add_argument("-d",
+                           "--description",
+                           type= str,
+                           help= "Define the description of the selected entry")
+
+   ## Add extension arguments (if there's any)
+
+
    # }}} End of Adding arguments
-   args = parser.parse_args()
+
+
+   retArgs = vars(parser.parse_args()).copy() # Using .copy() @ the end bc w/o it after conversion both the namespace variables and the retArgs dict would point to the same memory address, ergo changing one would change the other as well and vica-versa.
    
-   if args.startLog:
-      print("`-s` recieved!")
-   if args.endLog:
-      print("`-e` recieved!")
-   if args.tags is not None:
-      # TODO: When processing tags take escape characters into account
+   # if args.tags is not None:
+      # NOTE: TO CONSIDER: When processing tags take escape characters into account
       # E.g.: "foo, bar, beer, one\, single\, tag"
       # Bc rn escaped commas aren't really escaped: when splitting the tags
       # arg into a list it ignors the effect `\` should have on text...
-      print(f"Tags as read:\n- {args.tags}\nTags as list:\n- {args.tags.split(", ")}")
+   #    print(f"Tags as read:\n- {args.tags}\nTags as list:\n- {args.tags.split(", ")}")
 
-   pass
+   return retArgs
+
 
 def initTTUI(): # initTextualTerminalUserInterface
 
@@ -245,7 +261,12 @@ def getUserInput(config: configparser.ConfigParser):
    # - [ ] using Textual TUI
    # -- This route first has to have a MWP Textual TUI that lets the user call sth like "start new time log" function that then prompts them to input params
 
+
    userInput = getTestInput()
+   userInput = parseCLI()
+
+   print(f'User input:\n- {userInput}')
+
    formattedUserInput = {}
 
    for key in config["extensions"]["fields"].split(','):
@@ -254,7 +275,6 @@ def getUserInput(config: configparser.ConfigParser):
          formattedUserInput[f'{key}'] = userInput[f'{key}']
       else:
          formattedUserInput[f'{key}'] = ''
-
 
    return formattedUserInput
 
@@ -395,7 +415,6 @@ def main():
    connection.row_factory = sqlite3.Row # Queries now return Row objects
    #}}}
 
-   parseCLI()
    # startTimeLog(config= config, connection= connection, logArgs= logArgs)
 
    ## {{{ Testing params
