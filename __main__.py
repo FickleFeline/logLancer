@@ -76,7 +76,7 @@ def initDB(config: configparser.ConfigParser, pathToDB: Path | str, logArgs: dic
 
    connection.close()
 
-def updateDB(db):
+def updateDBColumns(db):
    '''
    Update database columns based on extensinos
    (Add new ones, delete no longer relevant ones)
@@ -94,17 +94,17 @@ def calcTimeDiff(start: time.struct_time, end: time.struct_time):
 
    return diff
 
-def getTimeLog(pathToCurrentLogFile: Path | str, range: int, which: int):
+def getTimeLog(connection: sqlite3.Connection, range: int, which: list[int]):
    '''
    Return the desired time log from the log file as a dictionary
    
-   range:
+   Range:
    0: Return the whole log file
    1: Return only the last log
-   2: Return specified log (by rowid)
+   2: Return specified log (or range of logs) by rowid
 
    which:
-   rowid of the desired log
+   rowid of the desired log(s) (if relevant)
    '''
 
    #Read pathToLogFile and convert it into a dictionary
@@ -211,23 +211,12 @@ def startTimeLog(config: configparser.ConfigParser, connection: sqlite3.Connecti
    return
 
 
-def endTimeLog(config: configparser.ConfigParser, row:sqlite3.Row , logArgs: dict, connection: sqlite3.Connection | str = ""):
+def endTimeLog(config: configparser.ConfigParser, row:sqlite3.Row , logArgs: dict, connection: sqlite3.Connection):
    '''
    Insert end dateTime to the passed log in the current log file
    '''
    
    localLogArgs = logArgs
-   localConnection :sqlite3.Connection
-
-   # {{{ If there's no connection passed create one to the current db
-   if connection == "":
-      storage = config["settings"]["storedatahere"]
-      pathToCurrentLogFile = f"{storage}/{localLogArgs["startTime"].tm_year}-{localLogArgs["startTime"].tm_mon}.timelog"
-      localConnection = sqlite3.connect(pathToCurrentLogFile)
-      localConnection.row_factory = sqlite3.Row # Queries now return Row objects
-   else:
-      localConnection = connection
-   # }}}
 
    # Get log
 
@@ -247,12 +236,8 @@ def endTimeLog(config: configparser.ConfigParser, row:sqlite3.Row , logArgs: dic
       # print("==============================\nRow with added end time:")
       # print(list(cursor.execute("SELECT rowid, * FROM logsTable").fetchall()[-1]))
 
-      # {{{ if there was no connection passed in the function call close previously created connection
-      if connection == "":
-         localConnection.close()
-      # }}}
 
-def modifTimeLog():
+def editTimeLog():
 
    pass
 
