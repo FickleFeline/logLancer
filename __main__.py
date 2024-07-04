@@ -59,12 +59,12 @@ def initDefConfig():
 # }}} 
 
 
-def initDB(config: configparser.ConfigParser, pathToDB: Path | str, logArgs: dict):
+def initDB(config: configparser.ConfigParser, pathToDB: Path | str, fieldArgs: dict):
    '''
    Initiate a new time log database, based information in the config.ini file
    '''
 
-   columns = logArgs.keys()
+   columns = fieldArgs.keys()
 
    connection = sqlite3.connect(pathToDB)
    cursor = connection.cursor()
@@ -164,27 +164,27 @@ def updateDBRow(connection: sqlite3.Connection, rowToUpdate: sqlite3.Row , updat
 
    cursor.close()
 
-def getTestInput():
-
-   
-   #{{{ PLACHOLDER VARIABLES TO BE EVENTUALLY CHANGED INTO logArgs
-   description = "this is a task description"
-   tags = ["FT", "00"]
-   #}}}
-
-   config = configparser.ConfigParser()
-   _ =config.read("./config.ini")
-   timeformatinstorage = config["settings"]["timeformatinstorage"]
-   currentTime = time.gmtime() # Storing time info in gmt. This should be converted into time.localtime() when displaying to the user
-   formattedTime = time.strftime(timeformatinstorage, currentTime)
-
-   testInput:dict[str, int|str|list[int|str]] = {}
-   testInput["startTime"] = formattedTime
-   testInput["endTime"] = ""
-   testInput["description"] = description
-   testInput["tags"] = tags
-
-   return testInput
+# obsolete # def getTestInput():
+# obsolete # 
+# obsolete #    
+# obsolete #    #{{{ PLACHOLDER VARIABLES TO BE EVENTUALLY CHANGED INTO logArgs
+# obsolete #    description = "this is a task description"
+# obsolete #    tags = ["FT", "00"]
+# obsolete #    #}}}
+# obsolete # 
+# obsolete #    config = configparser.ConfigParser()
+# obsolete #    _ =config.read("./config.ini")
+# obsolete #    timeformatinstorage = config["settings"]["timeformatinstorage"]
+# obsolete #    currentTime = time.gmtime() # Storing time info in gmt. This should be converted into time.localtime() when displaying to the user
+# obsolete #    formattedTime = time.strftime(timeformatinstorage, currentTime)
+# obsolete # 
+# obsolete #    testInput:dict[str, int|str|list[int|str]] = {}
+# obsolete #    testInput["startTime"] = formattedTime
+# obsolete #    testInput["endTime"] = ""
+# obsolete #    testInput["description"] = description
+# obsolete #    testInput["tags"] = tags
+# obsolete # 
+# obsolete #    return testInput
 
 # }}} End of Helper funcitons
 
@@ -257,18 +257,20 @@ def getUserInput(config: configparser.ConfigParser):
 
    # TODO: Get commandlilne (and/or TUI) arguments. i.e.: tags, description, etc...
    # Two ways to get user inputs:
-   # - [ ] using CLI
+   # - [/] using CLI
+   # -- [x] Burnt in fields
+   # -- [ ] Dynamic fields and extension required inputs
    # - [ ] using Textual TUI
    # -- This route first has to have a MWP Textual TUI that lets the user call sth like "start new time log" function that then prompts them to input params
 
 
-   userInput = getTestInput()
    userInput = parseCLI()
 
-   print(f'User input:\n- {userInput}')
+   # print(f'User input:\n- {userInput}')
 
    formattedUserInput = {}
 
+   # Filling in fields based on user input
    for key in config["extensions"]["fields"].split(','):
       # print(f"Key: {key}")
       if " ".join(userInput.keys()).find(key) != -1: # If the field has a user input value assign it, otherwise assigne an empty string as value
@@ -276,9 +278,17 @@ def getUserInput(config: configparser.ConfigParser):
       else:
          formattedUserInput[f'{key}'] = ''
 
+   # Adding rest of the user inputs as nonField key & value pairs
+   for key in userInput.keys():
+      if " ".join(formattedUserInput.keys()).find(key) == -1: # If the userInput key not present in formatted user input key add its value as nonField
+         formattedUserInput[f'{key}-nonField'] = userInput[f'{key}']
+         # print(f"KeyS: {userInput.keys()}\nKey: {key}")
+
+
+   # print(formattedUserInput)
    return formattedUserInput
 
-def startTimeLog(config: configparser.ConfigParser, connection: sqlite3.Connection, logArgs: dict):
+def startTimeLog(config: configparser.ConfigParser, connection: sqlite3.Connection, fieldArgs: dict):
    '''
    Puts an endTime on the latest entry w/o an endTime (if there's any) then,
    creates a new entry in the current log file with all the needed data.
@@ -292,7 +302,7 @@ def startTimeLog(config: configparser.ConfigParser, connection: sqlite3.Connecti
       lastRow = cursor.execute("SELECT rowid, * FROM logsTable").fetchall()[-1]
       if lastRow["endTime"] == "": # this line checks the value of the endTime field. If it's empty that means that the task is still running.
          ## Yes:
-         endTimeLog(config = config, connection= connection, logArgs= logArgs, row = lastRow)
+         endTimeLog(config = config, connection= connection, logArgs= fieldArgs, row = lastRow)
          # print(list(cursor.execute("SELECT rowid FROM logsTable").fetchall()[-1]))
    except Exception as e:
       msg = "No entries in database; skipping endTime check"
@@ -302,10 +312,10 @@ def startTimeLog(config: configparser.ConfigParser, connection: sqlite3.Connecti
    ## create new timeLogEntry
 
    dynamicTokens = ""
-   for key in logArgs.keys():
+   for key in fieldArgs.keys():
       dynamicTokens += f":{key}, "
-      if isinstance(logArgs[f'{key}'], list):
-            logArgs[f'{key}'] = f"{"; ".join(logArgs[f'{key}'])}"
+      if isinstance(fieldArgs[f'{key}'], list):
+            fieldArgs[f'{key}'] = f"{"; ".join(fieldArgs[f'{key}'])}"
 
    dynamicTokens = dynamicTokens[:-2]
 
@@ -313,7 +323,7 @@ def startTimeLog(config: configparser.ConfigParser, connection: sqlite3.Connecti
       INSERT INTO logsTable VALUES
          ({dynamicTokens})
    """
-   _ = cursor.execute(addNewRow, logArgs)
+   _ = cursor.execute(addNewRow, fieldArgs)
    
 
    ## writeLogToLogFile()
@@ -399,7 +409,13 @@ def main():
 
 
    logArgs = getUserInput(config)
-   
+   fieldArgs = {}
+
+   for key in logArgs.keys():
+      if key.find("nonField") == -1:
+         fieldArgs[f'{key}'] = logArgs[f'{key}']
+      if key.find("startTime") != -1:
+         fieldArgs[f'{key}'] = formattedTime
 
    
    # Is there a current logFile at the given path?
@@ -408,14 +424,14 @@ def main():
       ## init one
       msg = "No existing database found for the provided time period; creating new one..."
       print(msg)
-      initDB(config = config, pathToDB= pathToCurrentLogFile, logArgs= logArgs)
+      initDB(config = config, pathToDB= pathToCurrentLogFile, fieldArgs= fieldArgs)
 
    #{{{ open and setup connection to time log database
    connection = sqlite3.connect(pathToCurrentLogFile)
    connection.row_factory = sqlite3.Row # Queries now return Row objects
    #}}}
 
-   # startTimeLog(config= config, connection= connection, logArgs= logArgs)
+   startTimeLog(config= config, connection= connection, fieldArgs= fieldArgs)
 
    ## {{{ Testing params
    # thePast = time.strptime("24-04-15 Mon 11:30:59", timeformatinstorage)
