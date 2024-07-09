@@ -10,6 +10,19 @@ import argparse                  # for parsing CLI arguments
 from dbHandler import *
 from dateTimeHelper import *
 
+# TODO:
+################################################################################################################
+# - [ ] Start implementing dynamic cli flags and a system to handle them.                                      #
+# -- Best start would be to edit the burnt in flags to be dynamically added;                                   #
+#    this way you don't have to wait until you have an idea for an extension xd                                #
+#                                                                                                              #
+# - [ ] Handle the `--addTags` & `--removeTags` flags correctly:                                               #
+# -- [ ] `--addTags`: when creating a new db entry just load its contents into the tags field BUT              #
+#        when using it with the modify command make it add (only) the not yet present tags to the tags field!  #
+#                                                                                                              #
+# -- [ ] `--removeTags`: when called w/ the modify command have it remove any tags present in the passed list  #
+#        (and prevent it from freking out when trying to remove a tag that's not present in an entry)          #
+################################################################################################################
 
 # {{{ Classes
 
@@ -127,7 +140,7 @@ def writeLogToLogFile(pathToLogFile: Path | str, log: dict):
 
 def parseCLI():
    '''
-   Handle user input from the command line or lack there of
+   Handle user input (or lack there of) from the command line
    '''
 
    # TODO: Dynamically add arguments so that extensions can add their own!
@@ -180,13 +193,6 @@ def parseCLI():
 
    retArgs = vars(parser.parse_args()).copy() # Using .copy() @ the end bc w/o it after conversion both the namespace variables and the retArgs dict would point to the same memory address, ergo changing one would change the other as well and vica-versa.
    
-   # if args.tags is not None:
-      # NOTE: TO CONSIDER: When processing tags take escape characters into account
-      # E.g.: "foo, bar, beer, one\, single\, tag"
-      # Bc rn escaped commas aren't really escaped: when splitting the tags
-      # arg into a list it ignors the effect `\` should have on text...
-   #    print(f"Tags as read:\n- {args.tags}\nTags as list:\n- {args.tags.split(", ")}")
-
    return retArgs
 
 
