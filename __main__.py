@@ -1,12 +1,12 @@
-from pathlib import Path         # to get location of home directory
-import configparser              # to create / read config file
-import sqlite3                   # to store/edit time logs in sqlite files
-import time                      # for time stuff
-import argparse                  # for parsing CLI arguments
-# import pandas as pd              # to display dicts nicely on CLI
-# import csv                     # to import/export the sqlite db to csv files
+from pathlib import Path          # to get location of home directory
+import configparser               # to create / read config file
+import sqlite3                    # to store/edit time logs in sqlite files
+import time                       # for time stuff
+import argparse                   # for parsing CLI arguments
+# import pandas as pd             # to display dicts nicely on CLI
+# import csv                      # to import/export the sqlite db to csv files
 # import textual                  # for creating a TUI
-# from datetime import timedelta   # also for time stuff
+# from datetime import timedelta  # also for time stuff
 from dbHandler import *
 from dateTimeHelper import *
 
